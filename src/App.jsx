@@ -1,73 +1,85 @@
-function App() {
+import React, { useEffect, useMemo, useState } from 'react'
+import NavBar from './components/NavBar'
+import Hero from './components/Hero'
+import ProductGrid from './components/ProductGrid'
+import LoyaltyExplainer from './components/LoyaltyExplainer'
+
+const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+
+export default function App() {
+  const [cart, setCart] = useState([])
+  const [user, setUser] = useState(null)
+  const [points, setPoints] = useState(0)
+
+  // Create or fetch a demo user on load
+  useEffect(() => {
+    async function ensureUser() {
+      try {
+        const res = await fetch(`${API}/api/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'Cake Lover', email: 'demo@cakebox.local' })
+        })
+        const data = await res.json()
+        setUser(data)
+        // fetch loyalty
+        const loy = await fetch(`${API}/api/users/${data._id}/loyalty`).then(r=>r.json())
+        setPoints(loy.points)
+      } catch (e) {
+        // ignore
+      }
+    }
+    ensureUser()
+  }, [])
+
+  const addToCart = (p) => {
+    setCart(prev => {
+      const idx = prev.findIndex(i => i._id === p._id)
+      if (idx > -1) {
+        const copy = [...prev]
+        copy[idx].quantity += 1
+        return copy
+      }
+      return [...prev, { ...p, quantity: 1 }]
+    })
+  }
+
+  const total = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart])
+
+  const checkout = async () => {
+    if (!user || cart.length === 0) return
+    const items = cart.map(i => ({ product_id: i._id, quantity: i.quantity }))
+    const redeem_points = 0
+    const res = await fetch(`${API}/api/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: user._id, items, redeem_points })
+    })
+    const data = await res.json()
+    if (data.order_id) {
+      setCart([])
+      setPoints(data.new_balance)
+      alert(`Order placed! Total $${data.total}. Points balance: ${data.new_balance}`)
+    } else {
+      alert('Checkout failed')
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Subtle pattern overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+    <div className="min-h-screen bg-white">
+      <NavBar onCartClick={checkout} onLoyaltyClick={()=>{}} onSignInClick={()=>{}} user={user} points={points} />
+      <Hero onShopClick={() => {}} />
+      <ProductGrid onAdd={addToCart} />
+      <LoyaltyExplainer />
+      <footer className="text-center py-10 text-slate-500 text-sm">© Cakebox — Crafted fresh daily</footer>
 
-      <div className="relative min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Header with Flames icon */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center mb-6">
-              <img
-                src="/flame-icon.svg"
-                alt="Flames"
-                className="w-24 h-24 drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]"
-              />
-            </div>
-
-            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-              Flames Blue
-            </h1>
-
-            <p className="text-xl text-blue-200 mb-6">
-              Build applications through conversation
-            </p>
-          </div>
-
-          {/* Instructions */}
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 shadow-xl mb-6">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Describe your idea</h3>
-                <p className="text-blue-200/80 text-sm">Use the chat panel on the left to tell the AI what you want to build</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                2
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Watch it build</h3>
-                <p className="text-blue-200/80 text-sm">Your app will appear in this preview as the AI generates the code</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                3
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Refine and iterate</h3>
-                <p className="text-blue-200/80 text-sm">Continue the conversation to add features and make changes</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-blue-300/60">
-              No coding required • Just describe what you want
-            </p>
-          </div>
+      {/* Floating Cart */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white rounded-full px-5 py-3 shadow-lg flex items-center gap-4">
+          <div className="text-sm">{cart.reduce((s,i)=>s+i.quantity,0)} items • ${total.toFixed(2)}</div>
+          <button onClick={checkout} className="bg-white text-slate-900 rounded-full px-4 py-2 text-sm font-medium hover:bg-slate-100">Checkout</button>
         </div>
-      </div>
+      )}
     </div>
   )
 }
-
-export default App
